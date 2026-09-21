@@ -72,6 +72,18 @@ export const injectTestNetFlow = async (count = 3) => {
   return res.json();
 };
 
+export const fetchPostMortem = async (incidentId = 'INC-DEMO-01', prefix = '208.67.222.0/24', subprefix = '208.67.222.0/25', rogueAsn = 4761, incidentType = 'SUBPREFIX_HIJACK') => {
+  const url = `${BASE_URL}/api/incidents/${incidentId}/postmortem?prefix=${encodeURIComponent(prefix)}&hijacked_subprefix=${encodeURIComponent(subprefix)}&rogue_asn=${rogueAsn}&incident_type=${encodeURIComponent(incidentType)}`;
+  const res = await fetch(url);
+  return res.json();
+};
+
+export const downloadPostMortem = (incidentId = 'INC-DEMO-01', format = 'markdown', prefix = '208.67.222.0/24') => {
+  const url = `${BASE_URL}/api/incidents/${incidentId}/postmortem/download?format=${format}&prefix=${encodeURIComponent(prefix)}`;
+  window.open(url, '_blank');
+};
+
+
 // WebSocket Connector
 export const connectBgpWebSocket = (onMessage, onOpen, onClose) => {
   let socket = null;

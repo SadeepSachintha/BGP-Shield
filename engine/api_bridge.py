@@ -19,6 +19,7 @@ from simulator import AttackSimulator
 from ripe_ris_consumer import RipeRisConsumer
 from rpki_live_sync import RpkiLiveSync
 from netflow_udp_collector import start_netflow_udp_server, NetFlowV9Parser
+from postmortem_generator import PostMortemGenerator
 import socket
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -341,6 +342,52 @@ async def inject_test_netflow_packets(count: int = 3):
         }
     finally:
         sock.close()
+
+@app.get("/api/incidents/{incident_id}/postmortem")
+def get_incident_postmortem(
+    incident_id: str,
+    prefix: str = Query("208.67.222.0/24"),
+    hijacked_subprefix: str = Query("208.67.222.0/25"),
+    rogue_asn: int = Query(4761),
+    incident_type: str = Query("SUBPREFIX_HIJACK")
+):
+    """Generate comprehensive structured Post-Mortem data with Markdown & HTML."""
+    data = PostMortemGenerator.generate_report_data(
+        incident_id=incident_id,
+        prefix=prefix,
+        hijacked_subprefix=hijacked_subprefix,
+        rogue_asn=rogue_asn,
+        incident_type=incident_type
+    )
+    return {
+        "data": data,
+        "markdown": PostMortemGenerator.to_markdown(data),
+        "html": PostMortemGenerator.to_html(data)
+    }
+
+@app.get("/api/incidents/{incident_id}/postmortem/download")
+def download_incident_postmortem(
+    incident_id: str,
+    format: str = Query("markdown"),
+    prefix: str = Query("208.67.222.0/24")
+):
+    """Download post-mortem report as .md or .html."""
+    from fastapi.responses import Response
+    data = PostMortemGenerator.generate_report_data(incident_id=incident_id, prefix=prefix)
+    if format == "html":
+        content = PostMortemGenerator.to_html(data)
+        media_type = "text/html"
+        filename = f"postmortem-{incident_id}.html"
+    else:
+        content = PostMortemGenerator.to_markdown(data)
+        media_type = "text/markdown"
+        filename = f"postmortem-{incident_id}.md"
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 # WebSocket endpoint
 @app.websocket("/api/ws/events")

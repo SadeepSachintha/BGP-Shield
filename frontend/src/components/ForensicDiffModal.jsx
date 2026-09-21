@@ -1,7 +1,8 @@
 import React from 'react';
-import { ShieldAlert, ShieldCheck, AlertTriangle, ArrowRight, X, Terminal, Cpu, Network } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, AlertTriangle, ArrowRight, X, Terminal, Cpu, Network, FileText } from 'lucide-react';
 
-export default function ForensicDiffModal({ event, onClose, onGenerateMitigation }) {
+export default function ForensicDiffModal({ event, onClose, onGenerateMitigation, onOpenPostMortem }) {
+
   if (!event) return null;
 
   const isThreat = event.is_hijack || event.is_leak || event.severity === 'CRITICAL' || event.severity === 'HIGH';
@@ -108,6 +109,18 @@ export default function ForensicDiffModal({ event, onClose, onGenerateMitigation
           >
             Close
           </button>
+          {onOpenPostMortem && (
+            <button
+              onClick={() => {
+                onClose();
+                onOpenPostMortem(event);
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold text-sky-300 bg-sky-950/70 border border-sky-700/60 hover:bg-sky-900/70 transition-all"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Post-Mortem Report
+            </button>
+          )}
           {isThreat && (
             <button
               onClick={() => {
@@ -127,3 +140,4 @@ export default function ForensicDiffModal({ event, onClose, onGenerateMitigation
     </div>
   );
 }
+

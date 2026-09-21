@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Terminal, Copy, Check, ShieldCheck, ShieldAlert, Cpu, Play } from 'lucide-react';
+import { Terminal, Copy, Check, ShieldCheck, ShieldAlert, Cpu, Play, FileText } from 'lucide-react';
 import { generateMitigation } from '../services/api';
 
-export default function MitigationConsole({ initialPrefix = '208.67.222.0/25', initialAsn = 4761, initialType = 'SUBPREFIX_HIJACK' }) {
+export default function MitigationConsole({ initialPrefix = '208.67.222.0/25', initialAsn = 4761, initialType = 'SUBPREFIX_HIJACK', onOpenPostMortem }) {
+
   const [prefix, setPrefix] = useState(initialPrefix);
   const [rogueAsn, setRogueAsn] = useState(initialAsn);
   const [incidentType, setIncidentType] = useState(initialType);
@@ -139,6 +140,24 @@ export default function MitigationConsole({ initialPrefix = '208.67.222.0/25', i
 
             {/* Actions */}
             <div className="flex items-center gap-2">
+              {onOpenPostMortem && (
+                <button
+                  onClick={() => onOpenPostMortem({
+                    prefix,
+                    target_prefix: prefix,
+                    subprefix: prefix,
+                    rogue_asn: rogueAsn,
+                    origin_as: rogueAsn,
+                    type: incidentType,
+                    incident_type: incidentType
+                  })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-950/80 border border-sky-700/60 hover:bg-sky-900/80 text-sky-300 text-xs font-mono font-bold transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Post-Mortem Report
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   const content = activeTab === 'junos' ? playbooks.flowspec_junos : (activeTab === 'cisco' ? playbooks.flowspec_cisco : playbooks.rtbh_bird);
@@ -149,6 +168,7 @@ export default function MitigationConsole({ initialPrefix = '208.67.222.0/25', i
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 {copied ? 'Copied' : 'Copy Config'}
               </button>
+
 
               <button
                 onClick={handleDeploy}

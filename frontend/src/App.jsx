@@ -22,6 +22,7 @@ import MitigationConsole from './components/MitigationConsole';
 import ChaosSimulator from './components/ChaosSimulator';
 import PolicySettings from './components/PolicySettings';
 import TimeTravelScrubber from './components/TimeTravelScrubber';
+import PostMortemModal from './components/PostMortemModal';
 
 import {
   fetchStatus,
@@ -43,11 +44,13 @@ export default function App() {
   const [netflowData, setNetflowData] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [mitigationParams, setMitigationParams] = useState(null);
+  const [postMortemIncident, setPostMortemIncident] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
   const [rpkiStatus, setRpkiStatus] = useState(null);
   const [timeTravelSnapshots, setTimeTravelSnapshots] = useState(null);
   const [activePlaybackStep, setActivePlaybackStep] = useState(null);
   const [showTimeTravel, setShowTimeTravel] = useState(true);
+
 
   // Initial Data Fetch
   const loadInitialData = async () => {
@@ -319,6 +322,7 @@ export default function App() {
             initialPrefix={mitigationParams?.prefix || '208.67.222.0/25'}
             initialAsn={mitigationParams?.rogueAsn || 4761}
             initialType={mitigationParams?.incidentType || 'SUBPREFIX_HIJACK'}
+            onOpenPostMortem={setPostMortemIncident}
           />
         )}
 
@@ -341,8 +345,18 @@ export default function App() {
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
           onGenerateMitigation={handleGenerateMitigation}
+          onOpenPostMortem={setPostMortemIncident}
+        />
+      )}
+
+      {/* Post-Mortem Report Modal */}
+      {postMortemIncident && (
+        <PostMortemModal
+          incident={postMortemIncident}
+          onClose={() => setPostMortemIncident(null)}
         />
       )}
     </div>
   );
 }
+
