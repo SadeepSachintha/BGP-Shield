@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+vendor/
+backend/vendor/
+frontend/node_modules/
+
+# Python Cache & Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Databases & Columnar Stores
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp
+engine/data/
+*.sqlite
+*.sqlite3
+backend/database/*.sqlite
+backend/database/*.sqlite-journal
+
+# Build Artifacts
+frontend/dist/
+dist/
+build/
+
+# Environment Configuration
+.env
+.env.backup
+.env.production
+backend/.env
+
+# Laravel Specific
+backend/storage/*.key
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/logs/*
+backend/bootstrap/cache/*
+!backend/bootstrap/cache/.gitignore
+!backend/storage/framework/cache/.gitignore
+!backend/storage/framework/sessions/.gitignore
+!backend/storage/framework/views/.gitignore
+!backend/storage/logs/.gitignore
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
