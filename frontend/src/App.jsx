@@ -21,12 +21,17 @@ import NetFlowTelemetry from './components/NetFlowTelemetry';
 import MitigationConsole from './components/MitigationConsole';
 import ChaosSimulator from './components/ChaosSimulator';
 import PolicySettings from './components/PolicySettings';
+import TimeTravelScrubber from './components/TimeTravelScrubber';
 
 import {
   fetchStatus,
   fetchRecentEvents,
   fetchTopology,
   fetchNetFlow,
+  fetchRpkiStatus,
+  triggerRpkiSync,
+  fetchTimeTravelSnapshots,
+  injectTestNetFlow,
   connectBgpWebSocket
 } from './services/api';
 
@@ -39,23 +44,47 @@ export default function App() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [mitigationParams, setMitigationParams] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
+  const [rpkiStatus, setRpkiStatus] = useState(null);
+  const [timeTravelSnapshots, setTimeTravelSnapshots] = useState(null);
+  const [activePlaybackStep, setActivePlaybackStep] = useState(null);
+  const [showTimeTravel, setShowTimeTravel] = useState(true);
 
   // Initial Data Fetch
   const loadInitialData = async () => {
     try {
-      const [statusRes, eventsRes, topoRes, netflowRes] = await Promise.all([
+      const [statusRes, eventsRes, topoRes, netflowRes, rpkiRes, snapshotsRes] = await Promise.all([
         fetchStatus().catch(() => null),
         fetchRecentEvents(40).catch(() => []),
         fetchTopology().catch(() => ({ nodes: [], links: [] })),
         fetchNetFlow().catch(() => null),
+        fetchRpkiStatus().catch(() => null),
+        fetchTimeTravelSnapshots().catch(() => null),
       ]);
 
       if (statusRes) setEngineStatus(statusRes);
       if (eventsRes) setEvents(eventsRes);
       if (topoRes) setTopology(topoRes);
       if (netflowRes) setNetflowData(netflowRes);
+      if (rpkiRes) setRpkiStatus(rpkiRes);
+      if (snapshotsRes) {
+        setTimeTravelSnapshots(snapshotsRes);
+        if (snapshotsRes.steps && snapshotsRes.steps[0]) {
+          setActivePlaybackStep(snapshotsRes.steps[0]);
+        }
+      }
     } catch (err) {
       console.error('Failed to load initial data', err);
+    }
+  };
+
+  const handleSyncRpki = async () => {
+    try {
+      const res = await triggerRpkiSync();
+      if (res && res.status === 'SUCCESS') {
+        setRpkiStatus(res);
+      }
+    } catch (err) {
+      console.error('Failed to sync RPKI', err);
     }
   };
 
@@ -147,6 +176,19 @@ export default function App() {
             </span>
           </div>
 
+          {/* Live RPKI ROA Sync */}
+          <button
+            onClick={handleSyncRpki}
+            title="Click to trigger live RPKI ROA sync from Cloudflare"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-850 border border-slate-800 text-xs font-mono transition-colors cursor-pointer"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-slate-400">RPKI:</span>
+            <span className="font-bold text-emerald-300">
+              {rpkiStatus?.total_roas ? `${(rpkiStatus.total_roas / 1000).toFixed(0)}k+ ROAs` : 'Live Sync'}
+            </span>
+          </button>
+
           {/* Active Threats */}
           <div
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
@@ -237,20 +279,29 @@ export default function App() {
 
       {/* Main Workspace */}
       <main className="flex-1 p-6 max-w-[1600px] w-full mx-auto">
-        {/* TAB 1: Topology & Live Radar (Split Screen) */}
+        {/* TAB 1: Topology & Live Radar (Split Screen with Time-Travel) */}
         {activeTab === 'radar' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-160px)] min-h-[600px]">
-            {/* Left: D3.js Force-Directed Graph */}
-            <div className="lg:col-span-8 h-full">
-              <TopologyGraph
-                topologyData={topology}
-                activeThreats={activeThreats}
-                onSelectAsn={(node) => console.log('Selected ASN:', node)}
-              />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[680px]">
+            {/* Left: D3.js Force-Directed Graph + Time-Travel Scrubber */}
+            <div className="lg:col-span-8 flex flex-col gap-4">
+              <div className="h-[480px]">
+                <TopologyGraph
+                  topologyData={topology}
+                  activeThreats={activeThreats}
+                  activePlaybackStep={activePlaybackStep}
+                  onSelectAsn={(node) => console.log('Selected ASN:', node)}
+                />
+              </div>
+              {showTimeTravel && (
+                <TimeTravelScrubber
+                  snapshots={timeTravelSnapshots}
+                  onStepChange={(step) => setActivePlaybackStep(step)}
+                />
+              )}
             </div>
 
             {/* Right: Real-time BGP Announcement Feed */}
-            <div className="lg:col-span-4 h-full">
+            <div className="lg:col-span-4 h-full min-h-[580px]">
               <LiveRadarFeed
                 events={events}
                 onSelectEvent={(evt) => setSelectedEvent(evt)}

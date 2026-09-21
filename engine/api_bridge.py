@@ -17,6 +17,9 @@ from as_graph_analyzer import ASGraphAnalyzer
 from netflow_correlator import NetFlowCorrelator
 from simulator import AttackSimulator
 from ripe_ris_consumer import RipeRisConsumer
+from rpki_live_sync import RpkiLiveSync
+from netflow_udp_collector import start_netflow_udp_server, NetFlowV9Parser
+import socket
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("bgp_shield.api")
@@ -41,6 +44,7 @@ db_manager = DuckDBManager()
 analyzer = ASGraphAnalyzer()
 netflow_correlator = NetFlowCorrelator()
 simulator = AttackSimulator(analyzer, netflow_correlator, db_manager)
+rpki_sync = RpkiLiveSync(analyzer)
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -67,16 +71,17 @@ class ConnectionManager:
 
 ws_manager = ConnectionManager()
 
-# Background consumer instance
+# Background consumer instances
 ris_consumer: Optional[RipeRisConsumer] = None
 consumer_task: Optional[asyncio.Task] = None
+udp_transport = None
 
 async def broadcast_event(event: dict):
     await ws_manager.broadcast(event)
 
 @app.on_event("startup")
 async def startup_event():
-    global ris_consumer, consumer_task
+    global ris_consumer, consumer_task, udp_transport
     # Pre-seed initial sample topology links
     db_manager.record_as_link(174, 3356, "P2P")
     db_manager.record_as_link(3356, 1299, "P2P")
@@ -88,15 +93,23 @@ async def startup_event():
     # Start RIPE RIS live consumer in background
     ris_consumer = RipeRisConsumer(analyzer, db_manager, on_event_callback=broadcast_event)
     consumer_task = asyncio.create_task(ris_consumer.start())
-    logger.info("BGP-Shield Engine initialized.")
+
+    # Start Native NetFlow UDP Collector on port 2055
+    udp_transport, _ = await start_netflow_udp_server(netflow_correlator, db_manager, port=2055)
+
+    # Trigger background live RPKI ROA sync from Cloudflare
+    asyncio.create_task(rpki_sync.sync_from_cloudflare(max_roas=25000))
+    logger.info("BGP-Shield Engine & UDP NetFlow Collector initialized.")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global ris_consumer, consumer_task
+    global ris_consumer, consumer_task, udp_transport
     if ris_consumer:
         ris_consumer.stop()
     if consumer_task:
         consumer_task.cancel()
+    if udp_transport:
+        udp_transport.close()
 
 # --- Endpoints ---
 
@@ -226,6 +239,108 @@ end-policy
             "cisco_as_filter": cisco_as_filter
         }
     }
+
+@app.get("/api/rpki/status")
+async def get_rpki_status():
+    """Return live RPKI ROA sync status."""
+    return {
+        "status": "SYNCED" if rpki_sync.total_roas_loaded > 0 else "INITIALIZING",
+        "total_roas": rpki_sync.total_roas_loaded,
+        "unique_asns": rpki_sync.unique_asns,
+        "last_sync": rpki_sync.last_sync_time,
+        "source": "Cloudflare Public RPKI Cache"
+    }
+
+@app.post("/api/rpki/sync")
+async def trigger_rpki_sync():
+    """Trigger on-demand RPKI ROA synchronization."""
+    return await rpki_sync.sync_from_cloudflare(max_roas=30000)
+
+@app.get("/api/time-travel/snapshots")
+async def get_time_travel_snapshots(incident_id: Optional[str] = None):
+    """Return historical time-travel progression steps for incident forensic replayer."""
+    return {
+        "incident_id": incident_id or "demo-subprefix-hijack",
+        "target_prefix": "208.67.222.0/25",
+        "legitimate_holder": "Cisco OpenDNS (AS36692)",
+        "rogue_asn": 4761,
+        "steps": [
+            {
+                "step": 1,
+                "title": "Normal Baseline State",
+                "time_offset": "T - 5m",
+                "description": "Legitimate /24 announced by AS36692 via Tier-1 transit AS3356. RPKI ROA: VALID. Inbound flow: 1.2 Gbps.",
+                "active_path": [174, 3356, 36692],
+                "traffic_volume_gbps": 1.2,
+                "rpki_state": "VALID",
+                "alert_level": "NORMAL",
+                "threat_node": None
+            },
+            {
+                "step": 2,
+                "title": "Rogue Announcement Injected",
+                "time_offset": "T + 0s",
+                "description": "Rogue AS4761 announces unauthorized sub-prefix 208.67.222.0/25. RPKI origin mismatch detected!",
+                "active_path": [4761],
+                "traffic_volume_gbps": 1.2,
+                "rpki_state": "INVALID_ASN",
+                "alert_level": "WARNING",
+                "threat_node": 4761
+            },
+            {
+                "step": 3,
+                "title": "Transit Propagation (LPM Divert)",
+                "time_offset": "T + 12s",
+                "description": "Tier-1 carriers (AS174, AS3356) accept and propagate /25 due to Longest Prefix Match rule.",
+                "active_path": [174, 3356, 4761],
+                "traffic_volume_gbps": 0.35,
+                "rpki_state": "INVALID_ASN",
+                "alert_level": "CRITICAL",
+                "threat_node": 4761
+            },
+            {
+                "step": 4,
+                "title": "Traffic Diversion Collapse",
+                "time_offset": "T + 35s",
+                "description": "71% inbound DNS traffic collapse on legitimate AS36692. Traffic redirected to rogue origin AS4761.",
+                "active_path": [174, 3356, 4761],
+                "traffic_volume_gbps": 0.12,
+                "rpki_state": "INVALID_ASN",
+                "alert_level": "CRITICAL",
+                "threat_node": 4761
+            },
+            {
+                "step": 5,
+                "title": "Automated Mitigation Deployed",
+                "time_offset": "T + 48s",
+                "description": "BGP Flowspec discard filter deployed at border routers. Covering /25 announced. Traffic restored.",
+                "active_path": [174, 3356, 36692],
+                "traffic_volume_gbps": 1.18,
+                "rpki_state": "VALID",
+                "alert_level": "RESOLVED",
+                "threat_node": None
+            }
+        ]
+    }
+
+@app.post("/api/netflow/inject-test-flows")
+async def inject_test_netflow_packets(count: int = 3):
+    """Inject sample NetFlow v9 UDP datagrams to port 2055 for live telemetry testing."""
+    sample_flows = [
+        {"src_ip": "198.51.100.10", "dst_ip": "8.8.8.8", "src_port": 11211, "dst_port": 45123, "protocol": "UDP", "bytes": 85000000, "packets": 450000},
+        {"src_ip": "203.0.113.5", "dst_ip": "1.1.1.1", "src_port": 123, "dst_port": 51234, "protocol": "UDP", "bytes": 45000000, "packets": 250000},
+        {"src_ip": "192.0.2.1", "dst_ip": "208.67.222.1", "src_port": 53, "dst_port": 34123, "protocol": "UDP", "bytes": 12000000, "packets": 120000}
+    ]
+    packet_data = NetFlowV9Parser.build_test_packet(sample_flows[:count])
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.sendto(packet_data, ("127.0.0.1", 2055))
+        return {
+            "status": "SUCCESS",
+            "message": f"Sent NetFlow v9 UDP datagram ({len(packet_data)} bytes) with {len(sample_flows[:count])} flow records to 127.0.0.1:2055"
+        }
+    finally:
+        sock.close()
 
 # WebSocket endpoint
 @app.websocket("/api/ws/events")

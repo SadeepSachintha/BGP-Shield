@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { ShieldAlert, ZoomIn, ZoomOut, RotateCcw, Activity, Server, Radio } from 'lucide-react';
 
-export default function TopologyGraph({ topologyData, activeThreats = [], onSelectAsn }) {
+export default function TopologyGraph({ topologyData, activeThreats = [], onSelectAsn, activePlaybackStep = null }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
   const [selectedNode, setSelectedNode] = useState(null);
@@ -103,10 +103,21 @@ export default function TopologyGraph({ topologyData, activeThreats = [], onSele
     const nodes = Array.from(nodeMap.values());
     const links = (topologyData.links || []).map(d => ({ ...d }));
 
-    // Identify rogue/threat ASNs from activeThreats
+    // Identify rogue/threat ASNs from activeThreats or time-travel active step
     const threatAsns = new Set(
       activeThreats.flatMap(t => [t.attacker_asn, t.origin_asn, t.leak_as]).filter(Boolean)
     );
+    if (activePlaybackStep?.threat_node) {
+      threatAsns.add(activePlaybackStep.threat_node);
+    }
+
+    const activePathSet = new Set();
+    if (activePlaybackStep?.active_path) {
+      for (let i = 0; i < activePlaybackStep.active_path.length - 1; i++) {
+        activePathSet.add(`${activePlaybackStep.active_path[i]}-${activePlaybackStep.active_path[i+1]}`);
+        activePathSet.add(`${activePlaybackStep.active_path[i+1]}-${activePlaybackStep.active_path[i]}`);
+      }
+    }
 
     // Force simulation
     const simulation = d3.forceSimulation(nodes)
@@ -124,6 +135,10 @@ export default function TopologyGraph({ topologyData, activeThreats = [], onSele
       .attr('stroke', (d) => {
         const srcAsn = typeof d.source === 'object' ? d.source.asn : parseInt(d.source.replace('AS', ''));
         const tgtAsn = typeof d.target === 'object' ? d.target.asn : parseInt(d.target.replace('AS', ''));
+        const linkKey = `${srcAsn}-${tgtAsn}`;
+        if (activePathSet.has(linkKey)) {
+          return activePlaybackStep?.alert_level === 'CRITICAL' ? '#ef4444' : '#22d3ee';
+        }
         if (threatAsns.has(srcAsn) || threatAsns.has(tgtAsn)) {
           return '#ef4444';
         }
@@ -132,10 +147,12 @@ export default function TopologyGraph({ topologyData, activeThreats = [], onSele
       .attr('stroke-width', (d) => {
         const srcAsn = typeof d.source === 'object' ? d.source.asn : parseInt(d.source.replace('AS', ''));
         const tgtAsn = typeof d.target === 'object' ? d.target.asn : parseInt(d.target.replace('AS', ''));
+        const linkKey = `${srcAsn}-${tgtAsn}`;
+        if (activePathSet.has(linkKey)) return 4;
         return (threatAsns.has(srcAsn) || threatAsns.has(tgtAsn)) ? 3 : 1.5;
       })
       .attr('stroke-dasharray', d => d.type === 'P2P' ? '4,4' : null)
-      .attr('stroke-opacity', 0.6)
+      .attr('stroke-opacity', 0.8)
       .attr('marker-end', (d) => {
         const srcAsn = typeof d.source === 'object' ? d.source.asn : parseInt(d.source.replace('AS', ''));
         const tgtAsn = typeof d.target === 'object' ? d.target.asn : parseInt(d.target.replace('AS', ''));

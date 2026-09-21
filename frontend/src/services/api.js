@@ -44,6 +44,27 @@ export const generateMitigation = async (prefix, rogueAsn, incidentType) => {
   return res.json();
 };
 
+export const fetchRpkiStatus = async () => {
+  const res = await fetch(`${BASE_URL}/api/rpki/status`);
+  return res.json();
+};
+
+export const triggerRpkiSync = async () => {
+  const res = await fetch(`${BASE_URL}/api/rpki/sync`, { method: 'POST' });
+  return res.json();
+};
+
+export const fetchTimeTravelSnapshots = async (incidentId = null) => {
+  const url = incidentId ? `${BASE_URL}/api/time-travel/snapshots?incident_id=${incidentId}` : `${BASE_URL}/api/time-travel/snapshots`;
+  const res = await fetch(url);
+  return res.json();
+};
+
+export const injectTestNetFlow = async (count = 3) => {
+  const res = await fetch(`${BASE_URL}/api/netflow/inject-test-flows?count=${count}`, { method: 'POST' });
+  return res.json();
+};
+
 // WebSocket Connector
 export const connectBgpWebSocket = (onMessage, onOpen, onClose) => {
   let socket = null;

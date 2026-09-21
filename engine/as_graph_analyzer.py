@@ -40,6 +40,11 @@ class ASGraphAnalyzer:
             except ValueError:
                 continue
 
+    def update_roas(self, new_roas: Dict[str, Any]):
+        """Dynamically update in-memory ROA index from live feeds."""
+        self.monitored_networks.update(new_roas)
+        logger.info(f"Updated ROA index. Total indexed prefixes: {len(self.monitored_networks)}")
+
     def validate_rpki(self, prefix_str: str, origin_asn: int) -> Tuple[str, Optional[Dict[str, Any]]]:
         """
         Validate prefix and origin ASN against RPKI ROA records.
