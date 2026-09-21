@@ -1,0 +1,59 @@
+services:
+  # 1. Python Stream Analytics Engine (RIPE RIS WebSocket + NetFlow UDP 2055)
+  engine:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile
+    container_name: bgp-shield-engine
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      - "2055:2055/udp"
+    volumes:
+      - duckdb_data:/app/data
+    networks:
+      - bgp-net
+
+  # 2. Laravel 12 Incident Gateway (Alert Policies, Webhooks, Playbooks)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bgp-shield-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_NAME=BGP-Shield
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_KEY=base64:MiliGz6F9AXIuSzelNOogNuu+xQJcy/KeNB4GuviqQ4=
+      - BGP_ENGINE_URL=http://engine:8000
+      - DB_CONNECTION=sqlite
+    depends_on:
+      - engine
+    networks:
+      - bgp-net
+
+  # 3. React 19 + D3.js Visualization Console (Nginx Reverse Proxy)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bgp-shield-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - engine
+      - backend
+    networks:
+      - bgp-net
+
+networks:
+  bgp-net:
+    driver: bridge
+
+volumes:
+  duckdb_data:
+    driver: local

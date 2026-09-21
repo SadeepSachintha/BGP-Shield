@@ -2,8 +2,15 @@
  * BGP-Shield API & WebSocket Communication Service
  */
 
-const BASE_URL = 'http://127.0.0.1:8000';
-const WS_URL = 'ws://127.0.0.1:8000/api/ws/events';
+// Dynamic host detection: In standalone Vite dev (port 5173), direct to 127.0.0.1:8000;
+// In Docker / Nginx reverse proxy, use current window origin.
+const isViteDev = window.location.port === '5173' && window.location.hostname === 'localhost';
+const protocol = window.location.protocol;
+const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+const host = window.location.host;
+
+const BASE_URL = import.meta.env.VITE_API_URL || (isViteDev ? 'http://127.0.0.1:8000' : `${protocol}//${host}`);
+const WS_URL = import.meta.env.VITE_WS_URL || (isViteDev ? 'ws://127.0.0.1:8000/api/ws/events' : `${wsProtocol}//${host}/api/ws/events`);
 
 export const fetchStatus = async () => {
   const res = await fetch(`${BASE_URL}/api/status`);

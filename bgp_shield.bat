@@ -14,27 +14,32 @@ echo ======================================================
 echo    BGP-Shield: Sentinel Platform Control Center
 echo ======================================================
 echo.
-echo   [1] Start All Services (Engine + Gateway + Console)
+echo   [1] Start All Services (Local Native: Engine + Gateway + Console)
 echo   [2] Stop All Services  (Clean Shutdown)
 echo   [3] Run Automated Test Suite (Pytest)
-echo   [4] Start Python Stream Engine Only (Port 8000)
+echo   [4] Start Python Stream Engine Only (Port 8000 & UDP 2055)
 echo   [5] Start Laravel 12 Gateway Only   (Port 8080)
 echo   [6] Start React 19 Console Only     (Port 5173)
+echo   [D] Run Full Platform with Docker Compose (Engine + Gateway + Nginx)
+echo   [S] Stop Docker Compose Containers
 echo   [0] Exit
 echo.
 echo ======================================================
-set /p choice="Select an option [0-6]: "
+set /p choice="Select an option: "
 
-if "%choice%"=="1" goto :START_ALL
-if "%choice%"=="2" goto :STOP_ALL
-if "%choice%"=="3" goto :RUN_TESTS
-if "%choice%"=="4" goto :START_ENGINE
-if "%choice%"=="5" goto :START_BACKEND
-if "%choice%"=="6" goto :START_FRONTEND
+if /i "%choice%"=="1" goto :START_ALL
+if /i "%choice%"=="2" goto :STOP_ALL
+if /i "%choice%"=="3" goto :RUN_TESTS
+if /i "%choice%"=="4" goto :START_ENGINE
+if /i "%choice%"=="5" goto :START_BACKEND
+if /i "%choice%"=="6" goto :START_FRONTEND
+if /i "%choice%"=="D" goto :DOCKER_START
+if /i "%choice%"=="S" goto :DOCKER_STOP
 if "%choice%"=="0" goto :EXIT
 echo Invalid selection. Please try again.
 timeout /t 2 >nul
 goto :MENU
+
 
 :START_ALL
 echo.
@@ -98,6 +103,30 @@ echo [*] Starting React 19 + D3.js Console on port 5173...
 start "BGP-Shield Console" cmd /k "cd /d %~dp0frontend && npm.cmd run dev -- --port 5173"
 goto :MENU
 
+:DOCKER_START
+echo.
+echo [*] Building and launching BGP-Shield via Docker Compose...
+docker compose up --build -d
+echo.
+echo [*] Container status:
+docker compose ps
+echo.
+echo BGP-Shield Docker stack is running!
+echo Access the console at: http://localhost:5173/
+echo.
+pause
+goto :MENU
+
+:DOCKER_STOP
+echo.
+echo [*] Stopping BGP-Shield Docker Compose containers...
+docker compose down
+echo [*] Containers stopped.
+echo.
+pause
+goto :MENU
+
 :EXIT
 echo Exiting BGP-Shield Control Center.
 exit /b 0
+
