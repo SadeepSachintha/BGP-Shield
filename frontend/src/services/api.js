@@ -83,6 +83,21 @@ export const downloadPostMortem = (incidentId = 'INC-DEMO-01', format = 'markdow
   window.open(url, '_blank');
 };
 
+export const fetchAsnPeeringDb = async (asn) => {
+  const res = await fetch(`${BASE_URL}/api/as/${asn}/peeringdb`);
+  return res.json();
+};
+
+export const decodeCommunities = async (communities) => {
+  const res = await fetch(`${BASE_URL}/api/communities/decode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(communities)
+  });
+  return res.json();
+};
+
+
 
 // WebSocket Connector
 export const connectBgpWebSocket = (onMessage, onOpen, onClose) => {

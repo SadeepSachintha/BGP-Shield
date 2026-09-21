@@ -1,7 +1,9 @@
-import React from 'react';
-import { ShieldAlert, ShieldCheck, AlertTriangle, ArrowRight, X, Terminal, Cpu, Network, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldAlert, ShieldCheck, AlertTriangle, ArrowRight, X, Terminal, Cpu, Network, FileText, Tag } from 'lucide-react';
+import { decodeCommunities } from '../services/api';
 
 export default function ForensicDiffModal({ event, onClose, onGenerateMitigation, onOpenPostMortem }) {
+  const [communityAnalysis, setCommunityAnalysis] = useState(null);
 
   if (!event) return null;
 
@@ -9,6 +11,26 @@ export default function ForensicDiffModal({ event, onClose, onGenerateMitigation
   const roa = event.details?.roa_info || {};
   const hijackInfo = event.details?.hijack_info || {};
   const leakInfo = event.details?.leak_info || {};
+
+  useEffect(() => {
+    let isMounted = true;
+    const rawCommunities = event.communities || event.details?.communities || (
+      event.is_hijack
+        ? ['65535:666', '174:999:0', '13335:10001:1']
+        : event.is_leak
+        ? ['174:990:0', '3356:100:1']
+        : ['174:10:140', '13335:20000:1']
+    );
+
+    decodeCommunities(rawCommunities)
+      .then((res) => {
+        if (isMounted && res) setCommunityAnalysis(res);
+      })
+      .catch((err) => console.error('Failed to decode communities', err));
+
+    return () => { isMounted = false; };
+  }, [event]);
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
@@ -98,8 +120,47 @@ export default function ForensicDiffModal({ event, onClose, onGenerateMitigation
                 </span>
               </div>
             </div>
+
+            {/* Decoded BGP Communities (RFC 1997 & RFC 8092) */}
+            {communityAnalysis && communityAnalysis.decoded_communities?.length > 0 && (
+              <div className="pt-3 border-t border-slate-800/80">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-slate-300">
+                    <Tag className="w-3.5 h-3.5 text-cyan-400" />
+                    Decoded BGP Communities (RFC 1997 / RFC 8092)
+                  </div>
+                  {communityAnalysis.has_blackhole && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse">
+                      RTBH BLACKHOLE ACTIVE
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                  {communityAnalysis.decoded_communities.map((comm, idx) => (
+                    <div key={idx} className="flex items-start justify-between p-2 rounded-lg bg-slate-950/70 border border-slate-800 text-xs font-mono">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <code className="text-cyan-400 font-bold">{comm.raw}</code>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            comm.category === 'ACTION_BLACKHOLE' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
+                            comm.category === 'ACTION_NO_EXPORT' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' :
+                            'bg-sky-500/20 text-sky-400 border border-sky-500/40'
+                          }`}>
+                            {comm.action}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{comm.description}</p>
+                      </div>
+                      <span className="text-[10px] text-slate-500 shrink-0 ml-2">{comm.scope}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
+
+
 
         {/* Modal Actions */}
         <div className="flex items-center justify-end gap-3 pt-2">

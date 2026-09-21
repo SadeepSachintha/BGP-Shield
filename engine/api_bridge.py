@@ -20,6 +20,8 @@ from ripe_ris_consumer import RipeRisConsumer
 from rpki_live_sync import RpkiLiveSync
 from netflow_udp_collector import start_netflow_udp_server, NetFlowV9Parser
 from postmortem_generator import PostMortemGenerator
+from bgp_communities_decoder import BgpCommunitiesDecoder
+from peeringdb_client import PeeringDbClient
 import socket
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -46,6 +48,8 @@ analyzer = ASGraphAnalyzer()
 netflow_correlator = NetFlowCorrelator()
 simulator = AttackSimulator(analyzer, netflow_correlator, db_manager)
 rpki_sync = RpkiLiveSync(analyzer)
+peeringdb_client = PeeringDbClient()
+
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -138,8 +142,33 @@ async def get_incidents(limit: int = Query(20, ge=1, le=100)):
 
 @app.get("/api/topology")
 async def get_topology():
-    """Fetch graph nodes and links for D3 force-directed visualization."""
-    return await asyncio.to_thread(db_manager.get_topology)
+    """Fetch graph nodes and links for D3 force-directed visualization, enriched with PeeringDB metadata."""
+    topo = await asyncio.to_thread(db_manager.get_topology)
+    for node in topo.get("nodes", []):
+        asn_val = node.get("id") or node.get("asn")
+        if asn_val:
+            try:
+                meta = await peeringdb_client.get_asn_metadata(int(asn_val))
+                node["org_name"] = meta.get("org_name", node.get("name", ""))
+                node["policy_general"] = meta.get("policy_general", "Open")
+                node["fac_count"] = meta.get("fac_count", 1)
+                node["ix_count"] = meta.get("ix_count", 1)
+                node["ixp_presences"] = meta.get("ixp_presences", ["Global IXP"])
+                node["public_peering_capacity"] = meta.get("public_peering_capacity", "100G")
+            except (ValueError, TypeError):
+                pass
+    return topo
+
+@app.get("/api/as/{asn}/peeringdb")
+async def get_asn_peeringdb(asn: int):
+    """Fetch PeeringDB interconnection metadata, IXP presences, and peering policy for an ASN."""
+    return await peeringdb_client.get_asn_metadata(asn)
+
+@app.post("/api/communities/decode")
+def decode_bgp_communities(communities: List[str]):
+    """Decode an array of RFC 1997 standard and RFC 8092 large BGP communities."""
+    return BgpCommunitiesDecoder.analyze_route_communities(communities)
+
 
 @app.get("/api/netflow")
 async def get_netflow():

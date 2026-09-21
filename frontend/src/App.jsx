@@ -23,6 +23,7 @@ import ChaosSimulator from './components/ChaosSimulator';
 import PolicySettings from './components/PolicySettings';
 import TimeTravelScrubber from './components/TimeTravelScrubber';
 import PostMortemModal from './components/PostMortemModal';
+import AsnIntelligenceDrawer from './components/AsnIntelligenceDrawer';
 
 import {
   fetchStatus,
@@ -43,6 +44,7 @@ export default function App() {
   const [topology, setTopology] = useState({ nodes: [], links: [] });
   const [netflowData, setNetflowData] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedAsn, setSelectedAsn] = useState(null);
   const [mitigationParams, setMitigationParams] = useState(null);
   const [postMortemIncident, setPostMortemIncident] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
@@ -50,6 +52,7 @@ export default function App() {
   const [timeTravelSnapshots, setTimeTravelSnapshots] = useState(null);
   const [activePlaybackStep, setActivePlaybackStep] = useState(null);
   const [showTimeTravel, setShowTimeTravel] = useState(true);
+
 
 
   // Initial Data Fetch
@@ -290,11 +293,17 @@ export default function App() {
               <div className="h-[480px]">
                 <TopologyGraph
                   topologyData={topology}
-                  activeThreats={activeThreats}
                   activePlaybackStep={activePlaybackStep}
-                  onSelectAsn={(node) => console.log('Selected ASN:', node)}
+                  onSelectAsn={(node) => {
+                    const raw = node?.asn || (typeof node?.id === 'string' ? node.id.replace('AS', '') : node?.id);
+                    const parsed = parseInt(raw);
+                    if (!isNaN(parsed)) {
+                      setSelectedAsn(parsed);
+                    }
+                  }}
                 />
               </div>
+
               {showTimeTravel && (
                 <TimeTravelScrubber
                   snapshots={timeTravelSnapshots}
@@ -356,7 +365,16 @@ export default function App() {
           onClose={() => setPostMortemIncident(null)}
         />
       )}
+
+      {/* ASN PeeringDB Intelligence Drawer */}
+      {selectedAsn && (
+        <AsnIntelligenceDrawer
+          asn={selectedAsn}
+          onClose={() => setSelectedAsn(null)}
+        />
+      )}
     </div>
   );
 }
+
 
