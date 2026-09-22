@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ShieldAlert, ShieldCheck, AlertTriangle, ArrowRight, X, Terminal, Cpu, Network, FileText, Tag } from 'lucide-react';
 import { decodeCommunities } from '../services/api';
 
-export default function ForensicDiffModal({ event, onClose, onGenerateMitigation, onOpenPostMortem }) {
+export default function ForensicDiffModal({ event, onClose, onGenerateMitigation, onOpenPostMortem, onOpenThreatDossier }) {
   const [communityAnalysis, setCommunityAnalysis] = useState(null);
 
   if (!event) return null;
@@ -170,6 +170,18 @@ export default function ForensicDiffModal({ event, onClose, onGenerateMitigation
           >
             Close
           </button>
+          {onOpenThreatDossier && (
+            <button
+              onClick={() => {
+                onClose();
+                onOpenThreatDossier(event);
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold text-emerald-300 bg-emerald-950/70 border border-emerald-700/60 hover:bg-emerald-900/70 transition-all"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-emerald-400" />
+              AI Threat Dossier
+            </button>
+          )}
           {onOpenPostMortem && (
             <button
               onClick={() => {

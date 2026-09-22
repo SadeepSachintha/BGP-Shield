@@ -97,6 +97,34 @@ export const decodeCommunities = async (communities) => {
   return res.json();
 };
 
+export const fetchHistoricalIncidents = async () => {
+  const res = await fetch(`${BASE_URL}/api/historical-incidents`);
+  return res.json();
+};
+
+export const replayHistoricalIncident = async (key) => {
+  const res = await fetch(`${BASE_URL}/api/historical-incidents/replay`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key })
+  });
+  return res.json();
+};
+
+export const fetchThreatAnalysis = async (incidentId) => {
+  const res = await fetch(`${BASE_URL}/api/incidents/${incidentId}/threat-analysis`);
+  return res.json();
+};
+
+export const evaluateCustomThreat = async (incidentPayload) => {
+  const res = await fetch(`${BASE_URL}/api/threat-analysis/evaluate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(incidentPayload)
+  });
+  return res.json();
+};
+
 
 
 // WebSocket Connector

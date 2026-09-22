@@ -11,7 +11,8 @@ import {
   Flame,
   Globe,
   RefreshCw,
-  Cpu
+  Cpu,
+  History
 } from 'lucide-react';
 
 import TopologyGraph from './components/TopologyGraph';
@@ -24,6 +25,8 @@ import PolicySettings from './components/PolicySettings';
 import TimeTravelScrubber from './components/TimeTravelScrubber';
 import PostMortemModal from './components/PostMortemModal';
 import AsnIntelligenceDrawer from './components/AsnIntelligenceDrawer';
+import ThreatDossierModal from './components/ThreatDossierModal';
+import HistoricalReplayModal from './components/HistoricalReplayModal';
 
 import {
   fetchStatus,
@@ -47,6 +50,8 @@ export default function App() {
   const [selectedAsn, setSelectedAsn] = useState(null);
   const [mitigationParams, setMitigationParams] = useState(null);
   const [postMortemIncident, setPostMortemIncident] = useState(null);
+  const [threatDossierIncident, setThreatDossierIncident] = useState(null);
+  const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [rpkiStatus, setRpkiStatus] = useState(null);
   const [timeTravelSnapshots, setTimeTravelSnapshots] = useState(null);
@@ -272,6 +277,16 @@ export default function App() {
             <Settings className="w-3.5 h-3.5" />
             Alert Policies
           </button>
+
+          {/* Historical Disasters Archive */}
+          <button
+            onClick={() => setShowHistoricalModal(true)}
+            title="Browse and replay famous real-world BGP outages & hijacks"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all text-purple-300 bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 font-bold shadow-[0_0_12px_rgba(168,85,247,0.15)] cursor-pointer"
+          >
+            <History className="w-3.5 h-3.5" />
+            Historical Archive
+          </button>
         </nav>
 
         <button
@@ -355,6 +370,7 @@ export default function App() {
           onClose={() => setSelectedEvent(null)}
           onGenerateMitigation={handleGenerateMitigation}
           onOpenPostMortem={setPostMortemIncident}
+          onOpenThreatDossier={setThreatDossierIncident}
         />
       )}
 
@@ -373,6 +389,24 @@ export default function App() {
           onClose={() => setSelectedAsn(null)}
         />
       )}
+
+      {/* AI Threat Intelligence Dossier Modal */}
+      {threatDossierIncident && (
+        <ThreatDossierModal
+          incident={threatDossierIncident}
+          onClose={() => setThreatDossierIncident(null)}
+        />
+      )}
+
+      {/* Historical Internet Incident Replayer Modal */}
+      <HistoricalReplayModal
+        isOpen={showHistoricalModal}
+        onClose={() => setShowHistoricalModal(false)}
+        onIncidentReplayed={(inc) => {
+          loadInitialData();
+          setThreatDossierIncident(inc);
+        }}
+      />
     </div>
   );
 }

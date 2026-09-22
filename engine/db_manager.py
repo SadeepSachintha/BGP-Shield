@@ -259,6 +259,32 @@ class DuckDBManager:
                 incidents.append(d)
             return incidents
 
+    def get_incident_by_id(self, incident_id: str) -> Optional[Dict[str, Any]]:
+        """Get a single incident by ID."""
+        with self._lock:
+            con = self._get_connection()
+            results = con.execute("""
+                SELECT id, incident_type, severity, target_prefix, victim_asn,
+                       victim_name, attacker_asn, attacker_name, status,
+                       detected_at, resolved_at, details_json
+                FROM incidents
+                WHERE id = ?;
+            """, [incident_id]).fetchall()
+            if not results:
+                return None
+            columns = [desc[0] for desc in con.description]
+            d = dict(zip(columns, results[0]))
+            if isinstance(d.get("detected_at"), datetime):
+                d["detected_at"] = d["detected_at"].isoformat()
+            if isinstance(d.get("resolved_at"), datetime):
+                d["resolved_at"] = d["resolved_at"].isoformat()
+            if isinstance(d.get("details_json"), str):
+                try:
+                    d["details"] = json.loads(d["details_json"])
+                except Exception:
+                    d["details"] = {}
+            return d
+
     def get_netflow_analytics(self) -> Dict[str, Any]:
         """Aggregate NetFlow telemetry metrics."""
         with self._lock:
