@@ -8,6 +8,10 @@ export default function TopologyGraph({ topologyData, activeThreats = [], onSele
   const [selectedNode, setSelectedNode] = useState(null);
   const zoomBehaviorRef = useRef(null);
 
+  // Generate stable threat keys to prevent recreation of force simulation
+  const threatKey = (activeThreats || []).map(t => `${t.id || ''}-${t.attacker_asn || ''}-${t.origin_asn || ''}`).join(',');
+  const activeStepKey = activePlaybackStep ? `${activePlaybackStep.step_number}-${activePlaybackStep.alert_level}` : '';
+
   useEffect(() => {
     if (!topologyData || !topologyData.nodes || topologyData.nodes.length === 0) return;
 
@@ -119,12 +123,13 @@ export default function TopologyGraph({ topologyData, activeThreats = [], onSele
       }
     }
 
-    // Force simulation
+    // Force simulation with faster settling to preserve CPU
     const simulation = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).id(d => d.id).distance(110))
       .force('charge', d3.forceManyBody().strength(-350))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collide', d3.forceCollide().radius(45));
+      .force('collide', d3.forceCollide().radius(45))
+      .alphaDecay(0.06);
 
     // Draw Links
     const link = g.append('g')
@@ -161,7 +166,7 @@ export default function TopologyGraph({ topologyData, activeThreats = [], onSele
       .attr('filter', (d) => {
         const srcAsn = typeof d.source === 'object' ? d.source.asn : parseInt(d.source.replace('AS', ''));
         const tgtAsn = typeof d.target === 'object' ? d.target.asn : parseInt(d.target.replace('AS', ''));
-        return (threatAsns.has(srcAsn) || threatAsns.has(tgtAsn)) ? 'url(#threat-glow)' : 'url(#glow)';
+        return (threatAsns.has(srcAsn) || threatAsns.has(tgtAsn)) ? 'url(#threat-glow)' : null;
       });
 
     // Draw Nodes
@@ -226,7 +231,7 @@ export default function TopologyGraph({ topologyData, activeThreats = [], onSele
         return '#818cf8';
       })
       .attr('stroke-width', (d) => threatAsns.has(d.asn) ? 3 : 2)
-      .attr('filter', (d) => threatAsns.has(d.asn) ? 'url(#threat-glow)' : 'url(#glow)');
+      .attr('filter', (d) => threatAsns.has(d.asn) ? 'url(#threat-glow)' : null);
 
     // Node icon / symbol
     node.append('text')
@@ -265,7 +270,7 @@ export default function TopologyGraph({ topologyData, activeThreats = [], onSele
     return () => {
       simulation.stop();
     };
-  }, [topologyData, activeThreats]);
+  }, [topologyData, threatKey, activeStepKey]);
 
   const handleZoom = (scaleFactor) => {
     if (!svgRef.current || !zoomBehaviorRef.current) return;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -99,14 +99,16 @@ export default function App() {
     }
   };
 
+  const eventBufferRef = useRef([]);
+
   useEffect(() => {
     loadInitialData();
 
-    // Connect WebSocket
+    // Connect WebSocket with buffered event ingestion
     const cleanupWs = connectBgpWebSocket(
       (incomingEvent) => {
         if (incomingEvent.prefix) {
-          setEvents((prev) => [incomingEvent, ...prev.slice(0, 99)]);
+          eventBufferRef.current.push(incomingEvent);
         }
         // If incident alert, refresh topology and netflow
         if (incomingEvent.is_threat || incomingEvent.type === 'INCIDENT_ALERT') {
@@ -119,6 +121,15 @@ export default function App() {
       () => setWsConnected(false)
     );
 
+    // Batch flush events every 250ms to keep browser responsive
+    const flushInterval = setInterval(() => {
+      if (eventBufferRef.current.length > 0) {
+        const batch = eventBufferRef.current;
+        eventBufferRef.current = [];
+        setEvents((prev) => [...batch.reverse(), ...prev].slice(0, 100));
+      }
+    }, 250);
+
     // Periodic telemetry refresh
     const pollInterval = setInterval(() => {
       fetchStatus().then(setEngineStatus).catch(() => {});
@@ -127,13 +138,16 @@ export default function App() {
 
     return () => {
       cleanupWs();
+      clearInterval(flushInterval);
       clearInterval(pollInterval);
     };
   }, []);
 
-  const activeThreats = events.filter(
-    (e) => e.is_hijack || e.is_leak || e.severity === 'CRITICAL' || e.severity === 'HIGH'
-  );
+  const activeThreats = useMemo(() => {
+    return events.filter(
+      (e) => e.is_hijack || e.is_leak || e.severity === 'CRITICAL' || e.severity === 'HIGH'
+    );
+  }, [events]);
 
   const handleGenerateMitigation = (prefix, rogueAsn, incidentType) => {
     setMitigationParams({ prefix, rogueAsn, incidentType });

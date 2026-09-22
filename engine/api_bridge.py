@@ -25,6 +25,7 @@ from peeringdb_client import PeeringDbClient
 from threat_analyst import ThreatAnalyst
 from historical_replayer import HistoricalReplayer
 import socket
+import time
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("bgp_shield.api")
@@ -85,8 +86,21 @@ ris_consumer: Optional[RipeRisConsumer] = None
 consumer_task: Optional[asyncio.Task] = None
 udp_transport = None
 
+_last_broadcast_time = 0.0
+_MIN_BROADCAST_INTERVAL = 0.1  # Max 10 normal events/sec to prevent saturating browser
+
 async def broadcast_event(event: dict):
-    await ws_manager.broadcast(event)
+    global _last_broadcast_time
+    # Always broadcast threats, leaks, hijacks, and incidents immediately!
+    if event.get("is_hijack") or event.get("is_leak") or event.get("severity") in ("HIGH", "CRITICAL") or event.get("is_threat"):
+        await ws_manager.broadcast(event)
+        return
+
+    # Rate-limit normal announcements to avoid flooding frontend
+    now = time.time()
+    if now - _last_broadcast_time >= _MIN_BROADCAST_INTERVAL:
+        _last_broadcast_time = now
+        await ws_manager.broadcast(event)
 
 @app.on_event("startup")
 async def startup_event():
